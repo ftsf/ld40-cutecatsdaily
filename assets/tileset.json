@@ -1,0 +1,12 @@
+{ "columns":16,
+ "image":"..\/..\/..\/..\/..\/home\/ftsf\/programming\/ld40\/assets\/spritesheet.png",
+ "imageheight":128,
+ "imagewidth":128,
+ "margin":0,
+ "name":"tileset",
+ "spacing":0,
+ "tilecount":256,
+ "tileheight":8,
+ "tilewidth":8,
+ "type":"tileset"
+}
