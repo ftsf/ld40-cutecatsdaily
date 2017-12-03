@@ -188,6 +188,9 @@ type AdoptionReqs = tuple
 
 # GLOBALS
 
+var hitFirstSmellThreshold = false
+var hitSecondSmellThreshold = false
+var gameOver = false
 var adoptionList: seq[AdoptionReqs]
 var adoptions = 0
 var currentNoteText: string
@@ -369,16 +372,31 @@ proc getMoney(amount: int) =
   arp(5, 0xc000.uint16, 3)
   particles.add(Particle(spr: 73, text: "+$" & $amount, color: 14, pos: player.hotspot().vec2f + vec2f(0, -4), vel: vec2f(0, -0.1), ttl: 60))
 
-proc drawContext(name: string, desc: string) =
-  let contextY = 128 - 16
-  let contextX = if player.pos.x >= cameraX + 64: 0 else: 64
+var contextName: string
+var contextDesc: string
+
+var contextX = 0.0
+var contextY = screenHeight.float
+
+var showContext: bool
+
+proc setContext(name, desc: string) =
+  contextName = name
+  contextDesc = desc
+  showContext = contextName != nil
+
+proc drawContext() =
+  let targetContextY = (if showContext: 128 - 16 else: 128).float
+  let targetContextX = (if player.pos.y >= screenHeight - 32 and player.pos.x >= cameraX + 64: 0 else: 64).float
+  contextX = lerp(contextX, targetContextX, 0.1)
+  contextY = lerp(contextY, targetContextY, 0.1)
   setColor(2)
   rectfill(contextX, contextY, contextX + 64, contextY + 16)
   setColor(10)
   rect(contextX + 1, contextY + 1, contextX + 63, contextY + 16 - 1)
   setColor(15)
-  print(name, contextX + 3, contextY + 2)
-  let text = desc.splitLines()
+  print(contextName, contextX + 3, contextY + 2)
+  let text = contextDesc.splitLines()
   if text.len > 0:
     let line = text[((frame / 120) mod text.len)]
     print(line, contextX + 3, contextY + 8)
@@ -533,6 +551,9 @@ method getName(self: Cat): string =
     return "a zaney cat"
   of Friendly:
     return "a friendly cat"
+
+method getName(self: Courier): string =
+  return "a courier"
 
 method getName(self: Box): string =
   return "a box"
@@ -832,7 +853,7 @@ method getDescription(self: LitterBag): string =
   return "serves: " & $self.serves
 
 method getDescription(self: FoodBag): string =
-  return "serves: " & $self.serves
+  return "serves: " & $self.serves & "\nX to fill bowl"
 
 method getDescription(self: Bowl): string =
   return "serves: " & $self.foodServes
@@ -956,15 +977,15 @@ method update(self: Courier, dt: float) =
   if frame mod 6 == 0:
     pos.x += 1
 
-  if pos.x == 3*8 + 4:
-    if objectAtTile(3,13) == nil:
-      let box = newBox(vec2i(3*8, 13*8))
-      synth(0, synSqr, 100.0, 4, -2)
-      pitchbend(0, -10)
-      objects.add(box)
-      bonus += 1
-    else:
-      bonus = 0
+    if pos.x == 3*8 + 4:
+      if objectAtTile(3,13) == nil:
+        let box = newBox(vec2i(3*8, 13*8))
+        synth(0, synSqr, 100.0, 4, -2)
+        pitchbend(0, -10)
+        objects.add(box)
+        bonus += 1
+      else:
+        bonus = 0
 
   if pos.x > cameraX + screenWidth:
     toKill = true
@@ -1044,23 +1065,17 @@ method update(self: Poop, dt: float) =
 
 method update(self: LitterBox, dt: float) =
   if poop > 0:
-    if rnd(100 / poop) == 0:
+    if rnd(600 div poop) == 0:
       particles.add(Particle(spr: 7, pos: self.hotspot.vec2f + vec2f(rnd(2.0)-1.0, 0), vel: vec2f(0, -0.1), ttl: 30))
 
   if wee > 0:
-    if rnd(100 / wee) == 0:
+    if rnd(600 div wee) == 0:
       particles.add(Particle(spr: 8, pos: self.hotspot.vec2f + vec2f(rnd(2.0)-1.0, 0), vel: vec2f(0, -0.1), ttl: 30))
 
   procCall update(Movable(self), dt)
 
 proc snap(pos: Vec2i): Vec2i =
   return vec2i((pos.x div 8) * 8, (pos.y div 8) * 8)
-
-method drop(self: Bin) =
-  self.pos = snap(self.pos)
-
-method drop(self: Box) =
-  self.pos = snap(self.pos)
 
 proc pathTo(self: Cat, goal: Vec2i) =
   targetPos = goal
@@ -1598,7 +1613,10 @@ proc gameUpdate(dt: float) =
         elif tile.t == 105:
           synth(0, synSqr, 500, 2, -7)
           arp(0, rnd(0xffff).uint16, 3)
-          currentNoteText = "IT SEEMS TO HAVE A VIRUS =("
+          if boxDay == 0:
+            currentNoteText = "I SHOULD GO CHECK WHAT'S\nAT THE DOOR..."
+          else:
+            currentNoteText = "IT SEEMS TO HAVE A VIRUS =("
           noteTextChar = 0
           break
 
@@ -1670,6 +1688,23 @@ proc gameUpdate(dt: float) =
       houseSmell += box.poop.float * 1.0
       houseSmell += box.wee.float * 0.5
 
+  if not hitFirstSmellThreshold and houseSmell > 10:
+    if not shopMode:
+      currentNoteText = "THE HOUSE IS GETTING\nREALLY SMELLY!\nCLEAN IT UP!"
+      noteTextChar = 0
+      hitFirstSmellThreshold = true
+
+  if not hitSecondSmellThreshold and houseSmell > 20:
+    if not shopMode:
+      currentNoteText = "YOU NEED TO CLEAN\nTHIS PLACE UP\nASAP!!"
+      noteTextChar = 0
+      hitSecondSmellThreshold = true
+
+  if houseSmell > 30:
+    currentNoteText = "YOUR HOUSE HAS BEEN\nSHUT DOWN BY THE COUNCIL!\nTHE END."
+    noteTextChar = 0
+    gameOver = true
+
   for p in particles:
     if p.spr == 7 or p.spr == 8:
       let d = dist(p.pos + vec2f(4,4), player.hotspot().vec2f)
@@ -1696,6 +1731,16 @@ proc shadowMode() =
     pal(i,0)
 
 proc gameDraw() =
+
+  if gameOver:
+    setCamera()
+    setColor(0)
+    rectfill(0,0,screenWidth, screenHeight)
+
+    setColor(10)
+    printc("THE END", screenWidth div 2, screenHeight div 2)
+
+    return
 
   setColor(3)
   rectfill(0,0,256, screenHeight)
@@ -1729,18 +1774,34 @@ proc gameDraw() =
     else:
       spr(p.spr, p.pos.x - 4, p.pos.y - 7)
 
+  setColor(0)
+  rectfill(1,1,1+30,6)
   setColor(1)
   rectfill(1,1,1+houseSmell.int,6)
 
-  if houseSmell > 10 and gameTime mod 30 < 15:
-    setColor(12)
+  if houseSmell > 20:
+    setColor(9)
+    print("EWWWW!", 3, 1)
+  elif houseSmell > 10:
+    setColor(7)
     print("SMELLY!", 3, 1)
+  elif houseSmell > 5:
+    setColor(7)
+    print("MEH!", 3, 1)
+  else:
+    setColor(7)
+    print("CLEAN", 3, 1)
+
 
   setColor(0)
-  printr($nCats & " CATS", 64, 1)
+  print($adoptions & "/" & $nCats & " CATS", 34, 1)
 
-  setColor(11)
-  printr(daysOfWeek[day mod 7], 96, 1)
+  if gameTime mod 20 < 10 and (gameTime / 30 / 60).float mod 1.0 < 0.05:
+    setColor(15)
+  else:
+    setColor(11)
+  print(daysOfWeek[day mod 7], 82, 1)
+  hline(82, 7, 82.0 + ((gameTime / 30 / 60).float mod 1.0) * 11)
 
   if shopMode:
     if player.hotspot.y div 8 == 10:
@@ -1815,8 +1876,10 @@ proc gameDraw() =
 
   # CONTEXT INFO
 
+  showContext = false
+
   if player.holding != nil:
-    drawContext(player.holding.getName, player.holding.getDescription)
+    setContext(player.holding.getName, player.holding.getDescription)
   else:
     # find nearest object
     var nearestObj: Entity = nil
@@ -1829,21 +1892,28 @@ proc gameDraw() =
           nearestObj = obj
 
     if nearestObj != nil:
-      drawContext(nearestObj.getName, if nearestObj.canGrab(): "Z to pick up" else: "")
+      setContext(nearestObj.getName, if nearestObj.canGrab(): "Z to pick up" else: "")
     else:
       for tile in adjacentTiles(player.pos + player.offset):
         if tile.t == 48:
-          drawContext("door", "X to open")
+          setContext("door", "X to open")
           break
         if tile.t == 55:
-          drawContext("door", "X to close")
+          setContext("door", "X to close")
           break
         if tile.t == 105:
-          drawContext("computer", "X to use")
+          setContext("computer", "X to use")
           break
+
+  drawContext()
 
   for i in 0..<min(nausea.int,20):
     glitchBlur(0,0,screenWidth,screenHeight,1)
+
+  if gameTime < 100:
+    setColor(0)
+    rectfill(0,-1, screenWidth, lerp(32.0,-1.0, gameTime.float / 100.0))
+    rectfill(0,screenHeight+1, screenWidth, lerp(screenHeight.float - 32.0, screenHeight.float + 1.0, gameTime.float / 100.0))
 
   if gameTime > 300 and titlePosition > -34.0:
     titlePosition = lerp(titlePosition, -34.0, 0.05)
@@ -1861,11 +1931,11 @@ proc gameDraw() =
 
   # NOTE TEXT
   if currentNoteText != nil:
-    setColor(13)
+    setColor(2)
     rectfill(0,screenHeight - 32, screenWidth, screenHeight)
-    setColor(5)
+    setColor(10)
     rect(1,screenHeight - 31, screenWidth - 2, screenHeight - 2)
-    setColor(5)
+    setColor(15)
 
     let text = currentNoteText.splitLines()
     var count = 0
@@ -1886,8 +1956,48 @@ proc gameDraw() =
     for i, line in text:
       print(line[0..introTextChar-count], 4, screenHeight - 29 + i * 8)
       count += line.len
+    if introTextChar == introText[introTextIndex].high:
+      setColor(if frame mod 60 < 30: 15 else: 10)
+      print("[Z]", 4, screenHeight - 29 + 8 * text.len)
 
+
+proc introUpdate(dt: float) =
+  if btnp(pcStart) or btnp(pcA):
+    nico.run(nil, gameUpdate, gameDraw)
+
+var drippiness = 500
+
+proc introDraw() =
+  frame += 1
+  if frame == 60:
+    cls()
+    synth(0, synSqr, 400, 4, -4)
+    pitchbend(0, -2)
+    sspr(104, 72, 24, 24, screenWidth div 2 - 12, screenHeight div 2 - 12)
+  elif frame == 120:
+    synth(0, synSqr, 400, 4, -4)
+    pitchbend(0, -2)
+
+    setColor(15)
+    printc("ld40", 64, 92)
+    printc("made in 48 hours", 64, 106)
+
+  elif drippiness > 0:
+    # do drippy effect
+    for i in 0..<drippiness:
+      let x = rnd(128)
+      let y = rnd(128)
+      let c = pget(x,y)
+      if c == 8:
+        if pget(x,y+1) != 15:
+          pset(x,y+1,c)
+          drippiness -= 1
+
+  if frame >= 300:
+    nico.run(nil, gameUpdate, gameDraw)
 
 nico.init("impbox", "ld40")
-nico.createWindow("ld40", 128, 128, 4)
-nico.run(gameInit, gameUpdate, gameDraw)
+nico.createWindow("cute cats daily", 128, 128, 4)
+nico.run(gameInit, introUpdate, introDraw)
+
+
