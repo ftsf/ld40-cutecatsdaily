@@ -376,7 +376,7 @@ var contextName: string
 var contextDesc: string
 
 var contextX = 0.0
-var contextY = screenHeight.float
+var contextY = screenHeight.float + 1.0
 
 var showContext: bool
 
@@ -386,10 +386,10 @@ proc setContext(name, desc: string) =
   showContext = contextName != nil
 
 proc drawContext() =
-  let targetContextY = (if showContext: 128 - 16 else: 128).float
+  let targetContextY = (if showContext: 128 - 16 else: 129).float
   let targetContextX = (if player.pos.y >= screenHeight - 32 and player.pos.x >= cameraX + 64: 0 else: 64).float
   contextX = lerp(contextX, targetContextX, 0.1)
-  contextY = lerp(contextY, targetContextY, 0.1)
+  contextY = lerp(contextY, targetContextY, 0.5)
   setColor(2)
   rectfill(contextX, contextY, contextX + 64, contextY + 16)
   setColor(10)
@@ -615,7 +615,7 @@ method onGrab(self: Entity) {.base.} =
 
 proc moveX(self: Movable, amount: float, start: float) =
   var step = amount.int.sgn
-  for i in start..<abs(amount.int):
+  for i in start.int..<abs(amount.int):
     if not self.isSolid(step, 0):
       pos.x += step
     else:
@@ -625,7 +625,7 @@ proc moveX(self: Movable, amount: float, start: float) =
 
 proc moveY(self: Movable, amount: float, start: float) =
   var step = amount.int.sgn
-  for i in start..<abs(amount.int):
+  for i in start.int..<abs(amount.int):
     if not self.isSolid(0, step):
       pos.y += step
     else:
@@ -1940,8 +1940,9 @@ proc gameDraw() =
     let text = currentNoteText.splitLines()
     var count = 0
     for i, line in text:
-      print(line[0..noteTextChar-count], 4, screenHeight - 29 + i * 8)
-      count += line.len
+      if noteTextChar - count > 0:
+        print(line[0..clamp(noteTextChar-count, 0, line.high)], 4, screenHeight - 29 + i * 8)
+        count += line.len
 
   # INTRO TEXT
   if introTextIndex < introText.high:
@@ -1954,11 +1955,14 @@ proc gameDraw() =
     let text = introText[introTextIndex].splitLines()
     var count = 0
     for i, line in text:
-      print(line[0..introTextChar-count], 4, screenHeight - 29 + i * 8)
+      if introTextChar - count > 0:
+        print(line[0..clamp(introTextChar-count,0,line.high)], 4, screenHeight - 29 + i * 8)
       count += line.len
     if introTextChar == introText[introTextIndex].high:
       setColor(if frame mod 60 < 30: 15 else: 10)
       print("[Z]", 4, screenHeight - 29 + 8 * text.len)
+
+    #print(introText[introTextIndex][0..introTextChar], 4, screenHeight - 29)
 
 
 proc introUpdate(dt: float) =
