@@ -5,10 +5,10 @@ DATE=$(shell date +%Y-%m-%d)
 SOURCES=src/main.nim
 
 ld40d: src/main.nim
-	nim c -d:debug --nimcache:nimcache/debug -o:$@ --threads:on -d:gif $<
+	nim c -d:debug --nimcache:nimcache/debug -o:$@ -d:gif $<
 
 ld40: src/main.nim
-	nim c -d:release --nimcache:nimcache/release -o:$@ --threads:on -d:gif $<
+	nim c -d:release --nimcache:nimcache/release -o:$@ -d:gif $<
 
 rund: $(APPNAME)d
 	./$(APPNAME)d

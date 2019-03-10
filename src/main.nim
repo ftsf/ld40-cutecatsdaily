@@ -1,5 +1,5 @@
 import nico
-import vec
+import nico/vec
 import algorithm
 import sequtils
 import strutils
@@ -383,7 +383,7 @@ var showContext: bool
 proc setContext(name, desc: string) =
   contextName = name
   contextDesc = desc
-  showContext = contextName != nil
+  showContext = contextName != ""
 
 proc drawContext() =
   let targetContextY = (if showContext: 128 - 16 else: 129).float
@@ -831,7 +831,7 @@ method getDescription(self: Bin): string =
   return "space: " & $self.space
 
 method getDescription(self: Cat): string =
-  return $(self.age + 1) & " days " & (if stress > 1.0: repeatChar((stress / 2.0).int, '&') else: repeatChar(love div 2, '#'))
+  return $(self.age + 1) & " days " & (if stress > 1.0: repeat('&', (stress / 2.0).int) else: repeat('#', love div 2))
 
 method getDescription(self: Box): string =
   if hasCat != nil:
@@ -1096,24 +1096,24 @@ proc pathTo(self: Cat, goal: Vec2i) =
 proc enterState(self: Cat, newState: CatState) =
   case newState:
   of Chill:
-    route = nil
+    route = @[]
     #particles.add(Particle(text: "chill", pos: self.hotspot.vec2f + vec2f(rnd(2.0)-1.0, 0), vel: vec2f(0, -0.1), ttl: 60))
   of Sleep:
-    route = nil
+    route = @[]
     #particles.add(Particle(text: "sleep", pos: self.hotspot.vec2f + vec2f(rnd(2.0)-1.0, 0), vel: vec2f(0, -0.1), ttl: 60))
   of GoToToilet:
     toiletTimeout = 120
-    route = nil
+    route = @[]
     #particles.add(Particle(text: "toilet", pos: self.hotspot.vec2f + vec2f(rnd(2.0)-1.0, 0), vel: vec2f(0, -0.1), ttl: 60))
   of GoToEat:
     eatTimeout = 300
-    route = nil
+    route = @[]
     #particles.add(Particle(text: "eat", pos: self.hotspot.vec2f + vec2f(rnd(2.0)-1.0, 0), vel: vec2f(0, -0.1), ttl: 60))
   of Wander:
-    route = nil
+    route = @[]
     #particles.add(Particle(text: "wander", pos: self.hotspot.vec2f + vec2f(rnd(2.0)-1.0, 0), vel: vec2f(0, -0.1), ttl: 60))
   of Hyper:
-    route = nil
+    route = @[]
     #particles.add(Particle(text: "hyper", pos: self.hotspot.vec2f + vec2f(rnd(2.0)-1.0, 0), vel: vec2f(0, -0.1), ttl: 60))
   else:
     discard
@@ -1167,7 +1167,7 @@ method update(self: Cat, dt: float) =
 
   of Wander:
     boredom += dt * rnd(1.0) * 0.5
-    if route == nil:
+    if route.len == 0:
       # pick a random spot to wander to
       while true:
         let tx = 1 + rnd(14)
@@ -1181,7 +1181,7 @@ method update(self: Cat, dt: float) =
 
   of Hyper:
     needToSleep += dt * rnd(1.0) * 0.5
-    if route == nil:
+    if route.len == 0:
       # pick a random spot to wander to
       while true:
         let tx = 1 + rnd(14)
@@ -1222,7 +1222,7 @@ method update(self: Cat, dt: float) =
           love()
           enterState(Wander)
 
-    elif route == nil:
+    elif route.len == 0:
       # find a free bowl
       for obj in objects:
         if obj of Bowl:
@@ -1230,7 +1230,7 @@ method update(self: Cat, dt: float) =
           if bowl.occupied == nil and bowl.foodServes > 0:
             pathTo(bowl.hotspot)
             break
-      if route == nil:
+      if route.len == 0:
         for obj in objects:
           if obj of Bowl:
             let bowl = Bowl(obj)
@@ -1248,7 +1248,7 @@ method update(self: Cat, dt: float) =
               self.pos.y = bowl.pos.y + 2
               self.pos.x = bowl.pos.x
               wantsAttention = false
-              route = nil
+              route = @[]
               break
       if self.usingObject == nil:
         wantsAttention = true
@@ -1280,7 +1280,7 @@ method update(self: Cat, dt: float) =
           Bowl(usingObject).occupied = nil
         usingObject = nil
 
-    elif route == nil:
+    elif route.len == 0:
       var boxes = newSeq[LitterBox]()
       for obj in objects:
         if obj of LitterBox:
@@ -1309,12 +1309,12 @@ method update(self: Cat, dt: float) =
               box.occupied = self
               self.pos.y = box.pos.y + 2
               self.pos.x = box.pos.x
-              route = nil
+              route = @[]
               break
 
-  if route != nil:
-    if route.len == 0 or routeIndex > route.high:
-      route = nil
+  if route.len > 0:
+    if routeIndex > route.high:
+      route = @[]
 
     else:
       # try and find a new path if we get stuck
@@ -1333,7 +1333,7 @@ method update(self: Cat, dt: float) =
       needToWee = 0
 
   # follow route
-  if route != nil and route.len > 0:
+  if route.len > 0:
     let diff = (vec2f(route[routeIndex].x * 8 + 4, route[routeIndex].y * 8 + 4) - self.hotspot.vec2f)
     let d = diff.length
 
@@ -1348,7 +1348,7 @@ method update(self: Cat, dt: float) =
     if d < 0.5:
       routeIndex += 1
       if routeIndex > route.high:
-        route = nil
+        route = @[]
         routeIndex = 0
 
     else:
@@ -1405,11 +1405,17 @@ method draw(self: Cat) =
 
 proc gameInit() =
   loadPaletteFromGPL("palette.gpl")
-  loadSpritesheet("spritesheet.png")
+
+  loadSpritesheet(0, "spritesheet.png")
+  setSpritesheet(0)
+
+  loadFont(0, "font.png")
+  setFont(0)
 
   loadMusic(0, "music/meow.ogg")
 
-  loadMap("map.json")
+  loadMap(0, "map.json")
+  setMap(0)
 
   money = 500
 
@@ -1460,7 +1466,7 @@ proc gameInit() =
   if player == nil:
     raise newException(Exception, "No player")
 
-proc gameUpdate(dt: float) =
+proc gameUpdate(dt: float32) =
   if meowTimeout > 0:
     meowTimeout -= 1
   frame += 1
@@ -1488,7 +1494,7 @@ proc gameUpdate(dt: float) =
       introTextIndex = introText.high
       let c = newCourier(vec2i(-8, 14*8 - 4))
       objects.add(c)
-      music(0, 15, -1)
+      music(0, 15)
       return
 
     if introTextChar == introText[introTextIndex].high and btnp(pcA):
@@ -1502,7 +1508,7 @@ proc gameUpdate(dt: float) =
 
     return
 
-  if currentNoteText != nil:
+  if currentNoteText != "":
     nextCharTimer -= 1
     if nextCharTimer <= 0:
       if noteTextChar < currentNoteText.high:
@@ -1524,10 +1530,10 @@ proc gameUpdate(dt: float) =
           arp(4, rnd([0x2300, 0x3400, 0x7400, 0x1200]).uint16, 1)
 
     if btnp(pcStart):
-      currentNoteText = nil
+      currentNoteText = ""
       return
     if noteTextChar == currentNoteText.high and btnp(pcA):
-      currentNoteText = nil
+      currentNoteText = ""
       noteTextChar = 0
     return
 
@@ -1763,12 +1769,12 @@ proc gameDraw() =
     #rect(obj.pos.x + obj.hitbox.x, obj.pos.y + obj.hitbox.y, obj.pos.x + obj.hitbox.x + obj.hitbox.w - 1, obj.pos.y + obj.hitbox.y + obj.hitbox.h - 1)
 
   for p in particles:
-    if p.text != nil and p.spr != 0:
+    if p.text != "" and p.spr != 0:
       let tw = textWidth(p.text) div 2
       spr(p.spr, p.pos.x - tw - 4, p.pos.y - 7)
       setColor(p.color)
       printc(p.text, p.pos.x, p.pos.y - 4)
-    elif p.text != nil:
+    elif p.text != "":
       setColor(p.color)
       printc(p.text, p.pos.x, p.pos.y - 4)
     else:
@@ -1816,7 +1822,7 @@ proc gameDraw() =
           textBubble("CURRENTLY LOOKING FOR:", screenWidth + screenWidth div 2, y)
           y += 8
           for req in adoptionList:
-            textBubble(repeatChar(req.love div 2, '#') & " " & $(req.color.CatColor) & " " & $req.personality & " " & $req.ageMin & "+ days", screenWidth + screenWidth div 2, y, if player.holding != nil and player.holding of Cat and Cat(player.holding).meetReq(req): 6 else: 2)
+            textBubble(repeat('#', req.love div 2) & " " & $(req.color.CatColor) & " " & $req.personality & " " & $req.ageMin & "+ days", screenWidth + screenWidth div 2, y, if player.holding != nil and player.holding of Cat and Cat(player.holding).meetReq(req): 6 else: 2)
             y += 8
 
       if tx == 18 or tx == 23 or tx == 26:
@@ -1930,7 +1936,7 @@ proc gameDraw() =
     sspr(0,96,128,32, 0,  titlePosition)
 
   # NOTE TEXT
-  if currentNoteText != nil:
+  if currentNoteText != "":
     setColor(2)
     rectfill(0,screenHeight - 32, screenWidth, screenHeight)
     setColor(10)
@@ -1965,7 +1971,7 @@ proc gameDraw() =
     #print(introText[introTextIndex][0..introTextChar], 4, screenHeight - 29)
 
 
-proc introUpdate(dt: float) =
+proc introUpdate(dt: float32) =
   if btnp(pcStart) or btnp(pcA):
     nico.run(nil, gameUpdate, gameDraw)
 
